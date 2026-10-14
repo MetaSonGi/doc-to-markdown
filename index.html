@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문서 → 마크다운 변환기</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background:#f3f5fa; color:#1d2433; min-height:100vh; padding:18px 12px 48px;
+  }
+  #wrap { width:100%; max-width:860px; margin:0 auto; }
+  header { text-align:center; margin:10px 0 18px; }
+  header h1 { font-size:26px; font-weight:900; letter-spacing:-0.5px; }
+  header p { font-size:13px; color:#667; margin-top:6px; line-height:1.6; }
+  .badge-row { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
+  .fmt { font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; background:#e3e9f7; color:#3b4a6b; }
+  .fmt.no { background:#fde8e8; color:#b04a4a; }
+  .card { background:#fff; border:1px solid #e2e7f2; border-radius:16px; padding:18px; margin-bottom:14px; box-shadow:0 2px 10px rgba(30,40,80,.05); }
+  .card h2 { font-size:15px; margin-bottom:12px; }
+  #drop {
+    border:2px dashed #b9c4de; border-radius:14px; padding:34px 16px; text-align:center;
+    color:#5a6578; cursor:pointer; transition:.15s; background:#fafbfe;
+  }
+  #drop.over { border-color:#5b7cff; background:#eef2ff; }
+  #drop .big { font-size:34px; margin-bottom:8px; }
+  #drop p { font-size:14px; color:#667; }
+  #drop .hint { font-size:12px; color:#99a; margin-top:6px; }
+  .opts { display:flex; gap:16px; flex-wrap:wrap; font-size:13px; color:#445; }
+  .opts label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+  .opts input { width:16px; height:16px; accent-color:#5b7cff; }
+  #fileList { display:flex; flex-direction:column; gap:8px; }
+  .frow {
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid #e6eaf5;
+    border-radius:10px; background:#fafbfe; font-size:13px; cursor:pointer;
+  }
+  .frow.sel { border-color:#5b7cff; background:#eef2ff; }
+  .frow .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .frow .meta { font-size:11px; color:#889; white-space:nowrap; }
+  .frow.err { border-color:#f0b6b6; background:#fff5f5; cursor:default; }
+  .frow .emsg { font-size:12px; color:#b04a4a; }
+  .tag { font-size:10px; font-weight:800; padding:3px 8px; border-radius:8px; background:#5b7cff; color:#fff; white-space:nowrap; }
+  .tag.bad { background:#d66; }
+  .tabs { display:flex; gap:6px; margin-bottom:10px; }
+  .tabs button {
+    padding:9px 18px; border-radius:10px; border:1px solid #dfe4f0; background:#f6f8fc;
+    font-size:13px; font-weight:700; cursor:pointer; color:#445; font-family:inherit;
+  }
+  .tabs button.on { background:#5b7cff; border-color:#5b7cff; color:#fff; }
+  .actions { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .actions button, .actions a {
+    padding:9px 16px; border-radius:10px; border:1px solid #dfe4f0; background:#fff;
+    font-size:13px; font-weight:700; cursor:pointer; color:#334; text-decoration:none; font-family:inherit;
+  }
+  .actions button.primary { background:#2f9e5f; border-color:#2f9e5f; color:#fff; }
+  .actions button:active, .actions a:active { transform:scale(.97); }
+  #preview {
+    border:1px solid #e6eaf5; border-radius:10px; padding:18px; background:#fff;
+    font-size:14px; line-height:1.75; max-height:520px; overflow:auto; word-break:break-word;
+  }
+  #preview h1 { font-size:22px; margin:14px 0 8px; padding-bottom:6px; border-bottom:2px solid #eef; }
+  #preview h2 { font-size:19px; margin:12px 0 6px; padding-bottom:4px; border-bottom:1px solid #eef; }
+  #preview h3 { font-size:16px; margin:10px 0 6px; }
+  #preview h4,#preview h5,#preview h6 { font-size:14px; margin:8px 0 4px; }
+  #preview p { margin:6px 0; }
+  #preview ul,#preview ol { margin:6px 0 6px 22px; }
+  #preview li { margin:3px 0; }
+  #preview blockquote { border-left:4px solid #c9d4f5; margin:8px 0; padding:6px 12px; color:#556; background:#f7f9ff; border-radius:0 8px 8px 0; }
+  #preview pre { background:#1e2433; color:#e8ecf8; padding:12px; border-radius:10px; overflow:auto; font-size:12.5px; margin:8px 0; }
+  #preview code { background:#eef1f9; padding:2px 6px; border-radius:6px; font-size:12.5px; }
+  #preview pre code { background:none; padding:0; color:inherit; }
+  #preview table { border-collapse:collapse; margin:10px 0; width:100%; font-size:13px; display:block; overflow-x:auto; }
+  #preview th,#preview td { border:1px solid #dbe1f0; padding:7px 10px; text-align:left; }
+  #preview th { background:#eef2ff; }
+  #preview hr { border:none; border-top:1px solid #e2e7f2; margin:14px 0; }
+  #preview img { max-width:100%; border-radius:8px; }
+  #preview a { color:#3b5bdb; }
+  #raw {
+    width:100%; min-height:380px; max-height:520px; border:1px solid #e6eaf5; border-radius:10px;
+    padding:14px; font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size:12.5px;
+    line-height:1.7; background:#0f1420; color:#dfe6f5; white-space:pre; overflow:auto; display:none;
+  }
+  #empty { text-align:center; color:#99a; font-size:13px; padding:30px 10px; line-height:1.8; }
+  #toast {
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#232838; color:#fff;
+    padding:10px 20px; border-radius:24px; font-size:13px; display:none; z-index:50; max-width:90vw; text-align:center;
+  }
+  footer { text-align:center; font-size:12px; color:#99a; margin-top:20px; line-height:1.8; }
+  @media (max-width:560px){
+    header h1 { font-size:22px; }
+    .card { padding:14px; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <header>
+    <h1>📄 문서 → 마크다운 변환기</h1>
+    <p>HTML · CSV · JSON · TXT · XML · MD 파일을 마크다운으로 변환합니다.<br>모든 처리는 브라우저 안에서 — 서버로 전송되지 않습니다.</p>
+    <div class="badge-row">
+      <span class="fmt">HTML</span><span class="fmt">CSV</span><span class="fmt">JSON</span>
+      <span class="fmt">TXT</span><span class="fmt">XML</span><span class="fmt">MD</span>
+      <span class="fmt no">PDF ✕</span><span class="fmt no">DOCX ✕</span>
+      <span class="fmt no">PPTX ✕</span><span class="fmt no">XLSX ✕</span>
+    </div>
+  </header>
+
+  <div class="card">
+    <div id="drop">
+      <div class="big">📥</div>
+      <p><b>파일을 여기에 드래그</b>하거나 클릭해서 선택하세요</p>
+      <p class="hint">여러 파일 일괄 변환 가능 · PDF/DOCX/PPTX/XLSX는 지원하지 않음</p>
+      <input type="file" id="fileInput" multiple hidden
+        accept=".html,.htm,.csv,.json,.txt,.md,.markdown,.mdown,.xml,.pdf,.docx,.pptx,.xlsx">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>⚙️ 변환 옵션</h2>
+    <div class="opts">
+      <label><input type="checkbox" id="optMeta" checked> 파일 메타데이터 헤더 추가 (파일명·날짜)</label>
+      <label><input type="checkbox" id="optToc" checked> HTML 변환 시 목차(TOC) 생성</label>
+    </div>
+  </div>
+
+  <div class="card" id="listCard" style="display:none">
+    <h2>📁 변환된 파일 <span id="fileCount"></span></h2>
+    <div id="fileList"></div>
+  </div>
+
+  <div class="card">
+    <h2>📝 변환 결과</h2>
+    <div id="empty">아직 변환된 파일이 없습니다.<br>위에서 파일을 선택해 주세요.</div>
+    <div id="resultBox" style="display:none">
+      <div class="tabs">
+        <button id="tabPrev" class="on">미리보기</button>
+        <button id="tabRaw">마크다운 원본</button>
+      </div>
+      <div class="actions">
+        <button id="btnCopy">📋 복사</button>
+        <button id="btnDl" class="primary">⬇ .md 다운로드</button>
+        <span id="statInfo" style="font-size:12px;color:#889;align-self:center"></span>
+      </div>
+      <div id="preview"></div>
+      <textarea id="raw" readonly></textarea>
+    </div>
+  </div>
+
+  <footer>
+    doc-to-markdown · 100% 브라우저 동작 · 외부 서버 없음<br>
+    PDF·DOCX·PPTX·XLSX 바이너리 문서는 브라우저 단독 파싱이 불가해 지원하지 않습니다.
+  </footer>
+</div>
+<div id="toast"></div>
+<script>
+"use strict";
+/* ================= 유틸 ================= */
+function esc(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+function slugify(s){
+  return String(s).toLowerCase().trim()
+    .replace(/[\s_]+/g,"-")
+    .replace(/[^a-z0-9가-힣-]/g,"")
+    .replace(/-+/g,"-").replace(/^-|-$/g,"") || "section";
+}
+function nowStr(){
+  var d=new Date(), p=function(n){ return ("0"+n).slice(-2); };
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes());
+}
+function toast(msg){
+  var t=document.getElementById("toast");
+  t.textContent=msg; t.style.display="block";
+  clearTimeout(t._tm); t._tm=setTimeout(function(){ t.style.display="none"; },2600);
+}
+
+/* ================= CSV ================= */
+function parseCSV(text){
+  var rows=[], row=[], field="", inQ=false;
+  for(var i=0;i<text.length;i++){
+    var c=text[i];
+    if(inQ){
+      if(c==='"'){ if(text[i+1]==='"'){ field+='"'; i++; } else inQ=false; }
+      else field+=c;
+    }else{
+      if(c==='"') inQ=true;
+      else if(c===","){ row.push(field); field=""; }
+      else if(c==="\n"){ row.push(field); rows.push(row); row=[]; field=""; }
+      else if(c==="\r"){}
+      else field+=c;
+    }
+  }
+  row.push(field); rows.push(row);
+  if(rows.length && rows[rows.length-1].length===1 && rows[rows.length-1][0]==="") rows.pop();
+  return rows.filter(function(r){ return !(r.length===1 && r[0]===""); });
+}
+function csvToMd(text){
+  var rows=parseCSV(text);
+  if(!rows.length) throw new Error("CSV 내용이 비어 있습니다.");
+  var cols=Math.max.apply(null, rows.map(function(r){ return r.length; }));
+  rows=rows.map(function(r){ while(r.length<cols) r.push(""); return r; });
+  var cell=function(s){ return String(s).replace(/\|/g,"\\|").replace(/\s+/g," ").trim(); };
+  var out=[];
+  out.push("| "+rows[0].map(cell).join(" | ")+" |");
+  out.push("| "+rows[0].map(function(){ return "---"; }).join(" | ")+" |");
+  for(var i=1;i<rows.length;i++) out.push("| "+rows[i].map(cell).join(" | ")+" |");
+  return out.join("\n")+"\n";
+}
+
+/* ================= JSON ================= */
+function jsonPrim(v){
+  if(typeof v==="string") return v;
+  if(typeof v==="boolean") return "`"+v+"`";
+  if(v===null||v===undefined) return "`null`";
+  return String(v);
+}
+function walkJson(v,key,depth,lines){
+  var pad="  ".repeat(depth);
+  if(v===null||v===undefined){ lines.push(pad+(key?"- **"+escKey(key)+"**: ":"- ")+"`null`"); return; }
+  if(Array.isArray(v)){
+    if(key) lines.push(pad+"- **"+escKey(key)+"**");
+    if(!v.length){ lines.push(pad+"  - (빈 배열)"); return; }
+    v.forEach(function(it,i){
+      if(it!==null && typeof it==="object") walkJson(it,"["+i+"]",depth+1,lines);
+      else lines.push(pad+"  - "+jsonPrim(it));
+    });
+    return;
+  }
+  if(typeof v==="object"){
+    if(key) lines.push(pad+"- **"+escKey(key)+"**");
+    var ks=Object.keys(v);
+    if(!ks.length){ lines.push(pad+"  - (빈 객체)"); return; }
+    ks.forEach(function(k){ walkJson(v[k],k,depth+1,lines); });
+    return;
+  }
+  lines.push(pad+(key?"- **"+escKey(key)+"**: ":"- ")+jsonPrim(v));
+}
+function escKey(k){ return String(k).replace(/\*/g,"\\*"); }
+function jsonToMd(text){
+  var obj;
+  try{ obj=JSON.parse(text); }
+  catch(e){ throw new Error("JSON 파싱 실패: "+e.message); }
+  if(JSON.stringify(obj).length>80000) return "```json\n"+text.trim()+"\n```\n";
+  var lines=[];
+  walkJson(obj,"",0,lines);
+  var s=lines.join("\n");
+  if(s.split("\n").length>500) return "```json\n"+text.trim()+"\n```\n";
+  return s+"\n";
+}
+
+/* ================= TXT ================= */
+function txtToMd(text){
+  var paras=String(text).replace(/\r/g,"").split(/\n{2,}/)
+    .map(function(p){ return p.trim(); }).filter(Boolean);
+  if(!paras.length) throw new Error("텍스트 내용이 비어 있습니다.");
+  var out=[];
+  paras.forEach(function(p){
+    var lines=p.split("\n").map(function(l){ return l.trim(); }).filter(function(l){ return l; });
+    if(!lines.length) return;
+    // 이미 마크다운 형식이면 그대로
+    if(/^(#{1,6}\s|>\s|```|(\s*([-*+]|\d+[.)])\s+)|\|.*\|\s*)$/.test(lines[0])){
+      out.push(lines.join("\n")+"\n"); return;
+    }
+    // 짧은 독립 줄 + 문장 부호 없음 → ## 제목 (과도한 추측 방지: 40자 이내)
+    if(lines.length===1 && lines[0].length<=40 && !/[.!?。！？]$/.test(lines[0]) && !/^([-*+•]|\d+[.)])\s/.test(lines[0])){
+      out.push("## "+lines[0]+"\n"); return;
+    }
+    // 리스트 감지
+    var allList=lines.length>1 && lines.every(function(l){ return /^([-*+•]|\d+[.)])\s+/.test(l); });
+    if(allList){
+      lines.forEach(function(l){
+        var m=l.match(/^([-*+•]|\d+[.)])\s+(.*)$/);
+        out.push(/^\d/.test(m[1]) ? "1. "+m[2] : "- "+m[2]);
+      });
+      out.push(""); return;
+    }
+    out.push(lines.join("  \n")+"\n");
+  });
+  return out.join("\n");
+}
+
+/* ================= XML ================= */
+function walkXml(el,depth,lines){
+  var pad="  ".repeat(depth);
+  var kids=Array.prototype.filter.call(el.children||[],function(){ return true; });
+  var txt=Array.prototype.map.call(el.childNodes||[],function(n){
+    return n.nodeType===3 ? n.nodeValue.trim() : "";
+  }).filter(Boolean).join(" ");
+  var attrs=Array.prototype.map.call(el.attributes||[],function(a){ return a.name+'="'+a.value+'"'; }).join(" ");
+  var label="`"+el.tagName+"`"+(attrs?" ("+attrs+")":"");
+  if(!kids.length){ lines.push(pad+"- "+label+(txt?": "+txt:"")); }
+  else{
+    lines.push(pad+"- "+label+(txt?": "+txt:""));
+    kids.forEach(function(k){ walkXml(k,depth+1,lines); });
+  }
+}
+function xmlToMd(text){
+  var doc=new DOMParser().parseFromString(text,"text/xml");
+  if(doc.querySelector("parsererror")) throw new Error("XML 파싱 실패: 형식을 확인해 주세요.");
+  var lines=[];
+  walkXml(doc.documentElement,0,lines);
+  return lines.join("\n")+"\n";
+}
+
+/* ================= HTML → Markdown ================= */
+function inlineMd(node){
+  var s="";
+  Array.prototype.forEach.call(node.childNodes||[],function(ch){
+    if(ch.nodeType===3){ s+=ch.nodeValue.replace(/\s+/g," "); }
+    else if(ch.nodeType===1){
+      var t=ch.tagName.toLowerCase();
+      if(t==="br"){ s+="  \n"; }
+      else if(t==="a"){
+        var href=ch.getAttribute("href")||"";
+        var txt=inlineMd(ch).trim();
+        s+= txt ? "["+txt+"]("+href+")" : href;
+      }
+      else if(t==="img"){
+        s+="!["+(ch.getAttribute("alt")||"이미지")+"]("+(ch.getAttribute("src")||"")+")";
+      }
+      else if(t==="strong"||t==="b"){ s+="**"+inlineMd(ch).trim()+"**"; }
+      else if(t==="em"||t==="i"){ s+="*"+inlineMd(ch).trim()+"*"; }
+      else if(t==="del"||t==="s"){ s+="~~"+inlineMd(ch).trim()+"~~"; }
+      else if(t==="code"){ s+="`"+ch.textContent.trim()+"`"; }
+      else if(t==="script"||t==="style"||t==="noscript"){}
+      else { s+=inlineMd(ch); }
+    }
+  });
+  return s;
+}
+function listMd(el,depth,headings){
+  var ordered=el.tagName.toLowerCase()==="ol";
+  var lines=[], idx=0, indent="  ".repeat(depth);
+  Array.prototype.forEach.call(el.children,function(li){
+    if(li.tagName.toLowerCase()!=="li") return;
+    idx++;
+    var prefix=(ordered? idx+"." : "-")+" ";
+    var line=indent+prefix, hasText=false;
+    var nested=[];
+    Array.prototype.forEach.call(li.childNodes,function(ch){
+      if(ch.nodeType===3){
+        var tx=ch.nodeValue.replace(/\s+/g," ").trim();
+        if(tx){ line+=(hasText?" ":"")+tx; hasText=true; }
+      }else if(ch.nodeType===1){
+        var ct=ch.tagName.toLowerCase();
+        if(ct==="ul"||ct==="ol"){ nested.push(listMd(ch,depth+1,headings)); }
+        else{ var s=inlineMd(ch).trim(); if(s){ line+=(hasText?" ":"")+s; hasText=true; } }
+      }
+    });
+    if(hasText) lines.push(line);
+    nested.forEach(function(n){
+      n.split("\n").forEach(function(l){ if(l.trim()) lines.push(l); });
+    });
+  });
+  return lines.join("\n")+"\n";
+}
+function tableMd(el){
+  var rows=[];
+  Array.prototype.forEach.call(el.querySelectorAll("tr"),function(tr){
+    var cells=Array.prototype.map.call(tr.children,function(c){
+      return inlineMd(c).trim().replace(/\|/g,"\\|").replace(/\s+/g," ");
+    });
+    if(cells.length) rows.push(cells);
+  });
+  if(!rows.length) return "";
+  var cols=Math.max.apply(null,rows.map(function(r){ return r.length; }));
+  rows=rows.map(function(r){ while(r.length<cols) r.push(""); return r; });
+  var out="| "+rows[0].join(" | ")+" |";
+  out+="\n| "+rows[0].map(function(){ return "---"; }).join(" | ")+" |";
+  for(var i=1;i<rows.length;i++) out+="\n| "+rows[i].join(" | ")+" |";
+  return out+"\n";
+}
+function elMd(el,depth,headings){
+  var t=el.tagName.toLowerCase();
+  var m=t.match(/^h([1-6])$/);
+  if(m){
+    var txt=inlineMd(el).trim();
+    if(txt){ headings.push({level:+m[1],text:txt}); return "#".repeat(+m[1])+" "+txt+"\n"; }
+    return "";
+  }
+  if(t==="p"){ var s=inlineMd(el).trim(); return s? s+"\n":""; }
+  if(t==="blockquote"){
+    var inner=blockMd(el,depth,headings).split("\n")
+      .map(function(l){ return "> "+l; }).join("\n").replace(/(> \n)+$/,"\n");
+    return inner;
+  }
+  if(t==="pre"){
+    var code=el.textContent.replace(/^\n+|\n+$/g,"");
+    var cls=(el.querySelector("code")||{}).className||"";
+    var lang=(cls.match(/language-(\w+)/)||[])[1]||"";
+    return "```"+lang+"\n"+code+"\n```\n";
+  }
+  if(t==="hr") return "---\n";
+  if(t==="br") return "\n";
+  if(t==="ul"||t==="ol") return listMd(el,depth,headings);
+  if(t==="table") return tableMd(el);
+  if(t==="li"){ var s2=inlineMd(el).trim(); return s2? "- "+s2+"\n":""; }
+  if(/^(div|section|article|main|header|footer|aside|figure|figcaption|details|summary)$/.test(t))
+    return blockMd(el,depth,headings);
+  if(/^(span|font|label|small|abbr|time|mark)$/.test(t)){
+    var s3=inlineMd(el).trim(); return s3? s3+"\n":"";
+  }
+  if(/^(script|style|noscript|template|svg|nav|iframe|canvas|video|audio)$/.test(t)) return "";
+  var s4=inlineMd(el).trim(); return s4? s4+"\n":"";
+}
+function blockMd(node,depth,headings){
+  var parts=[];
+  Array.prototype.forEach.call(node.childNodes||[],function(ch){
+    if(ch.nodeType===3){
+      var t=ch.nodeValue.replace(/\s+/g," ").trim();
+      if(t) parts.push(t+"\n");
+    }else if(ch.nodeType===1){
+      parts.push(elMd(ch,depth,headings));
+    }
+  });
+  return parts.join("\n");
+}
+function buildToc(headings){
+  var items=headings.filter(function(h){ return h.level<=3 && h.text; });
+  if(items.length<2) return "";
+  var out=["## 목차",""];
+  items.forEach(function(h){
+    out.push("  ".repeat(h.level-1)+"- ["+h.text+"](#"+slugify(h.text)+")");
+  });
+  out.push("");
+  return out.join("\n");
+}
+function htmlToMd(html,opts){
+  var doc=new DOMParser().parseFromString(html,"text/html");
+  doc.querySelectorAll("script,style,noscript,template,svg,nav,iframe").forEach(function(e){ e.remove(); });
+  var headings=[];
+  var body=doc.body;
+  var title=(doc.querySelector("title")||{}).textContent;
+  var md=blockMd(body,0,headings);
+  md=mdCleanup(md);
+  if(!md.trim() && title) md="# "+title.trim()+"\n";
+  if(opts && opts.toc){
+    var toc=buildToc(headings);
+    if(toc) md=toc+"\n"+md;
+  }
+  return md;
+}
+
+/* ================= MD 정리 ================= */
+function mdCleanup(md){
+  return String(md).replace(/[ \t]+$/gm,"").replace(/\n{3,}/g,"\n\n").trim()+"\n";
+}
+
+/* ================= 마크다운 미리보기 렌더러 ================= */
+function inlineHtml(s){
+  s=esc(s);
+  s=s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g,function(m,a,u){
+    if(/^\s*javascript:/i.test(u)) u="#";
+    return '<img alt="'+a+'" src="'+u+'">';
+  });
+  s=s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,function(m,t,u){
+    if(/^\s*javascript:/i.test(u)) u="#";
+    return '<a href="'+u+'" target="_blank" rel="noopener">'+t+'</a>';
+  });
+  s=s.replace(/`([^`\n]+)`/g,"<code>$1</code>");
+  s=s.replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>");
+  s=s.replace(/(^|[^*\w])\*([^*\n]+)\*/g,"$1<em>$2</em>");
+  s=s.replace(/~~([^~]+)~~/g,"<del>$1</del>");
+  return s;
+}
+function mdToHtml(md){
+  var lines=String(md).split("\n"), html=[], i=0, inCode=false, codeBuf=[];
+  while(i<lines.length){
+    var line=lines[i];
+    if(/^\s*```/.test(line)){
+      if(inCode){ html.push("<pre><code>"+esc(codeBuf.join("\n"))+"</code></pre>"); codeBuf=[]; inCode=false; }
+      else inCode=true;
+      i++; continue;
+    }
+    if(inCode){ codeBuf.push(line); i++; continue; }
+    if(/^\s*$/.test(line)){ i++; continue; }
+    var hm=line.match(/^(#{1,6})\s+(.*)$/);
+    if(hm){
+      var id=slugify(hm[2].replace(/[*_`~\[\]()]/g,""));
+      html.push('<h'+hm[1].length+' id="'+id+'">'+inlineHtml(hm[2])+'</h'+hm[1].length+'>');
+      i++; continue;
+    }
+    if(/^\s*---+\s*$/.test(line)){ html.push("<hr>"); i++; continue; }
+    if(/^\s*>\s?/.test(line)){
+      var qs=[];
+      while(i<lines.length && /^\s*>\s?/.test(lines[i])){ qs.push(lines[i].replace(/^\s*>\s?/,"")); i++; }
+      html.push("<blockquote>"+qs.map(function(q){ return "<p>"+inlineHtml(q)+"</p>"; }).join("")+"</blockquote>");
+      continue;
+    }
+    if(/^\s*\|.*\|\s*$/.test(line) && i+1<lines.length && /^\s*\|[\s:|\-]+\|\s*$/.test(lines[i+1])){
+      var rows=[];
+      while(i<lines.length && /^\s*\|.*\|\s*$/.test(lines[i])){
+        rows.push(lines[i].trim().replace(/^\||\|$/g,"").split("|").map(function(c){ return c.trim(); }));
+        i++;
+      }
+      var t='<table><thead><tr>'+rows[0].map(function(c){ return "<th>"+inlineHtml(c)+"</th>"; }).join("")+'</tr></thead><tbody>';
+      rows.slice(2).forEach(function(r){
+        t+="<tr>"+r.map(function(c){ return "<td>"+inlineHtml(c)+"</td>"; }).join("")+"</tr>";
+      });
+      html.push(t+"</tbody></table>"); continue;
+    }
+    var lm=line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    if(lm){
+      var items=[], ordered=/^\d/.test(lm[2]);
+      while(i<lines.length){
+        var m3=lines[i].match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+        if(!m3) break;
+        items.push(m3[3]); i++;
+      }
+      var tag=ordered?"ol":"ul";
+      html.push("<"+tag+">"+items.map(function(it){ return "<li>"+inlineHtml(it)+"</li>"; }).join("")+"</"+tag+">");
+      continue;
+    }
+    var ps=[];
+    while(i<lines.length && !/^\s*$/.test(lines[i])
+      && !/^(#{1,6})\s/.test(lines[i]) && !/^\s*```/.test(lines[i])
+      && !/^\s*---+\s*$/.test(lines[i]) && !/^\s*>\s?/.test(lines[i])
+      && !/^\s*\|/.test(lines[i]) && !/^(\s*)([-*+]|\d+[.)])\s+/.test(lines[i])){
+      ps.push(lines[i]); i++;
+    }
+    if(ps.length) html.push("<p>"+ps.map(inlineHtml).join("<br>")+"</p>");
+    else i++;
+  }
+  return html.join("\n");
+}
+
+/* ================= 변환 디스패치 ================= */
+var UNSUPPORTED={pdf:1,docx:1,pptx:1,xlsx:1};
+var BIN_MSG="바이너리 문서(PDF·DOCX·PPTX·XLSX)는 브라우저 단독으로 파싱할 수 없어 지원하지 않습니다.";
+function detectExt(name){
+  var m=/\.([a-z0-9]+)$/i.exec(name||"");
+  return m? m[1].toLowerCase() : "";
+}
+function convertText(ext,text,opts){
+  if(UNSUPPORTED[ext]) throw new Error(BIN_MSG);
+  var md;
+  if(ext==="html"||ext==="htm") md=htmlToMd(text,opts);
+  else if(ext==="csv") md=csvToMd(text);
+  else if(ext==="json") md=jsonToMd(text);
+  else if(ext==="xml") md=xmlToMd(text);
+  else if(ext==="md"||ext==="markdown"||ext==="mdown") md=mdCleanup(text);
+  else if(ext==="txt") md=txtToMd(text);
+  else throw new Error("지원하지 않는 형식입니다. (."+ext+")");
+  if(opts && opts.meta){
+    md="---\n원본 파일: "+opts.fileName+"\n변환 일시: "+nowStr()+"\n---\n\n"+md;
+  }
+  return md;
+}
+
+/* ================= UI ================= */
+var files=[], selIdx=-1;
+var $=function(id){ return document.getElementById(id); };
+
+function renderList(){
+  var card=$("listCard"), list=$("fileList");
+  if(!files.length){ card.style.display="none"; return; }
+  card.style.display="block";
+  $("fileCount").textContent="("+files.length+"개)";
+  list.innerHTML="";
+  files.forEach(function(f,i){
+    var row=document.createElement("div");
+    row.className="frow"+(i===selIdx?" sel":"")+(f.error?" err":"");
+    if(f.error){
+      row.innerHTML='<span class="tag bad">'+esc(f.ext.toUpperCase())+'</span>'+
+        '<span class="nm">'+esc(f.name)+'</span><span class="emsg">'+esc(f.error)+'</span>';
+    }else{
+      row.innerHTML='<span class="tag">'+esc(f.ext.toUpperCase())+'</span>'+
+        '<span class="nm">'+esc(f.name)+'</span>'+
+        '<span class="meta">'+f.md.length.toLocaleString()+'자</span>';
+      row.addEventListener("click",function(){ selectFile(i); });
+    }
+    list.appendChild(row);
+  });
+}
+function selectFile(i){
+  selIdx=i;
+  renderList();
+  var f=files[i];
+  if(!f||f.error) return;
+  $("empty").style.display="none";
+  $("resultBox").style.display="block";
+  $("raw").value=f.md;
+  $("preview").innerHTML=mdToHtml(f.md)||'<p style="color:#99a">(변환 결과가 비어 있습니다)</p>';
+  $("statInfo").textContent=f.name+" · "+f.md.length.toLocaleString()+"자";
+  setTab("prev");
+}
+function setTab(which){
+  var isPrev=which==="prev";
+  $("tabPrev").classList.toggle("on",isPrev);
+  $("tabRaw").classList.toggle("on",!isPrev);
+  $("preview").style.display=isPrev?"block":"none";
+  $("raw").style.display=isPrev?"none":"block";
+}
+function handleFiles(fileList){
+  Array.prototype.forEach.call(fileList,function(file){
+    var ext=detectExt(file.name);
+    var reader=new FileReader();
+    reader.onload=function(){
+      try{
+        var opts={ meta:$("optMeta").checked, toc:$("optToc").checked, fileName:file.name };
+        var md=convertText(ext,String(reader.result||""),opts);
+        files.push({name:file.name,ext:ext,md:md,error:null});
+        selectFile(files.length-1);
+        toast("✅ "+file.name+" 변환 완료");
+      }catch(e){
+        files.push({name:file.name,ext:ext||"?",md:"",error:e.message});
+        renderList();
+        toast("⚠️ "+file.name+": "+e.message);
+      }
+    };
+    reader.onerror=function(){ toast("⚠️ 파일을 읽지 못했습니다: "+file.name); };
+    reader.readAsText(file,"UTF-8");
+  });
+}
+function downloadSelected(){
+  var f=files[selIdx];
+  if(!f||f.error) return;
+  var base=f.name.replace(/\.[a-z0-9]+$/i,"")||"document";
+  var blob=new Blob([f.md],{type:"text/markdown;charset=utf-8"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=base+"_변환.md";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+  toast("⬇ "+a.download+" 다운로드");
+}
+function copySelected(){
+  var f=files[selIdx];
+  if(!f||f.error) return;
+  var done=function(){ toast("📋 클립보드에 복사했습니다"); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(f.md).then(done,function(){ fallbackCopy(f.md); done(); });
+  }else fallbackCopy(f.md), done();
+}
+function fallbackCopy(text){
+  var ta=document.createElement("textarea");
+  ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); }catch(e){}
+  ta.remove();
+}
+function initUI(){
+  var drop=$("drop"), fi=$("fileInput");
+  drop.addEventListener("click",function(){ fi.click(); });
+  fi.addEventListener("change",function(){ handleFiles(fi.files); fi.value=""; });
+  ["dragover","dragenter"].forEach(function(ev){
+    drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave","drop"].forEach(function(ev){
+    drop.addEventListener(ev,function(e){ e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop",function(e){
+    if(e.dataTransfer && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  });
+  $("tabPrev").addEventListener("click",function(){ setTab("prev"); });
+  $("tabRaw").addEventListener("click",function(){ setTab("raw"); });
+  $("btnCopy").addEventListener("click",copySelected);
+  $("btnDl").addEventListener("click",downloadSelected);
+}
+if(typeof window!=="undefined" && typeof document!=="undefined") initUI();
+
+/* 테스트 훅 */
+if(typeof globalThis!=="undefined"){
+  globalThis.__d2m={parseCSV:parseCSV,csvToMd:csvToMd,jsonToMd:jsonToMd,txtToMd:txtToMd,
+    xmlToMd:xmlToMd,htmlToMd:htmlToMd,mdCleanup:mdCleanup,mdToHtml:mdToHtml,
+    slugify:slugify,buildToc:buildToc,convertText:convertText,detectExt:detectExt,esc:esc};
+}
+</script>
+</body>
+</html>
